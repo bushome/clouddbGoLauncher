@@ -1,0 +1,40 @@
+# Everything under payload/ that sync-payload.cmd (or a manual one-time
+# drop-in, for payload/node/) populates is either large binary content or a
+# copy of something already tracked elsewhere (clouddbGo's dist/generated,
+# the dev-tree repo's watchdog) — never commit the populated content, only
+# the placeholder that marks the folder's intended contents for a fresh
+# clone. The "!...PLACE_..._HERE.txt" exceptions keep each placeholder
+# tracked; sync-payload.cmd's /MIR deletes them once real content lands,
+# at which point these ignore rules take over.
+
+payload/node/*
+!payload/node/PLACE_PORTABLE_NODE_RUNTIME_HERE.txt
+
+payload/app/dist/*
+!payload/app/dist/PLACE_COMPILED_DIST_HERE.txt
+
+payload/app/generated/sqlite-client/*
+!payload/app/generated/sqlite-client/PLACE_GENERATED_SQLITE_CLIENT_HERE.txt
+
+payload/app/node_modules/*
+!payload/app/node_modules/PLACE_PRODUCTION_NODE_MODULES_HERE.txt
+
+payload/app/watchdog/*
+!payload/app/watchdog/PLACE_WATCHDOG_HERE.txt
+
+# npm ci scratch folder used to build production-only node_modules without
+# touching clouddbGo's own dev node_modules — pure cache, safe to delete,
+# always recreated by sync-payload.cmd.
+/.prod-modules-staging/
+
+# Build output
+/clouddbgo-launcher.exe
+*.exe
+
+# Runtime artifacts from testing the exe in-place inside the source tree
+# (BUILD.md recommends testing from an external scratch folder instead, but
+# these are ignored here as a safety net in case that's ever skipped).
+/app/
+/node/
+/.payload-version
+/launcher.log
