@@ -101,7 +101,7 @@ func run() (exitCode int) {
 	appDir := filepath.Join(exeDir, "app")
 	markerPath := filepath.Join(exeDir, versionMarkerFilename)
 
-	if needsExtraction(markerPath) {
+	if needsExtraction(exeDir, appDir, markerPath) {
 		logf("First run (or updated build) detected — extracting application files...")
 		if err := extractPayload(exeDir); err != nil {
 			logf("ERROR: failed to extract embedded payload: %v", err)
@@ -209,15 +209,36 @@ func exeDir() (string, error) {
 	return filepath.Dir(exePath), nil
 }
 
-// needsExtraction is true when the version marker is missing or stale.
-// A missing marker covers both "genuinely first run" and "someone deleted
-// app/ or node/ by hand" — either way, re-extracting is the safe response.
-func needsExtraction(markerPath string) bool {
+// needsExtraction is true when the version marker is missing or stale, OR
+// when a couple of files extraction is supposed to have produced are
+// themselves missing. The marker alone isn't sufficient — it only proves a
+// PREVIOUS run's extraction completed, not that the extracted files are
+// still actually there right now. Confirmed as a real gap, not just
+// theoretical: deleting everything under app\ by hand while leaving
+// .payload-version untouched left the marker "valid," so this used to skip
+// re-extraction entirely and fail later inside launchWatchdog with a
+// confusing "not found" error instead of just fixing itself. Spot-checks
+// the same two files launchWatchdog itself requires, rather than walking
+// the whole tree — cheap, and those two are exactly the ones whose absence
+// would otherwise surface as a launchWatchdog failure instead of a clean
+// re-extraction.
+func needsExtraction(exeDir, appDir, markerPath string) bool {
 	data, err := os.ReadFile(markerPath)
-	if err != nil {
+	if err != nil || string(data) != embeddedVersion {
 		return true
 	}
-	return string(data) != embeddedVersion
+
+	criticalPaths := []string{
+		filepath.Join(exeDir, "node", "node.exe"),
+		filepath.Join(appDir, "watchdog", "watchdog.js"),
+	}
+	for _, p := range criticalPaths {
+		if _, err := os.Stat(p); err != nil {
+			return true
+		}
+	}
+
+	return false
 }
 
 // extractPayload walks the embedded payload/ tree and writes it out under
