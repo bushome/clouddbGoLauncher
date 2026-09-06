@@ -16,12 +16,15 @@
 //     watchdog.js under the extracted Node runtime and waits.
 //
 // Additionally: every run mirrors its console output to launcher.log next to
-// the exe, and pauses on exit rather than letting the console window vanish
-// instantly — added after a double-click test run crashed (empty
-// node_modules from a payload assembled before running sync-payload.cmd) and
-// closed before the error was readable. A solo player double-clicking this
-// with no console experience needs a window that stays open and a log file
-// that survives after they close it, on ANY exit path, not just this one.
+// the exe, and — on any exit the program makes on its own (an error, or
+// watchdog.js itself giving up) — prints a clear banner explaining that
+// before pausing for acknowledgment, rather than letting the window vanish
+// unexplained. This deliberately does NOT try to intercept the console's own
+// X-button close: Windows force-kills the process before Go code can react
+// to that, and a player closing the window on purpose doesn't need to
+// confirm it anyway. Added after a double-click test run crashed (empty
+// node_modules from a payload assembled before running sync-payload.cmd)
+// and closed before the error was readable.
 //
 // Payload layout expected under ./payload at build time (see BUILD.md):
 //
@@ -68,7 +71,7 @@ var out io.Writer = os.Stdout
 
 func main() {
 	exitCode := run()
-	pauseBeforeExit()
+	pauseBeforeExit(exitCode)
 	os.Exit(exitCode)
 }
 
@@ -128,9 +131,9 @@ func run() (exitCode int) {
 
 	// A clean return from launchWatchdog means the watchdog process itself
 	// exited on its own (not killed by the user) — that's unexpected during
-	// normal operation, since the watchdog is supposed to run indefinitely,
-	// so it's worth calling out rather than silently returning success.
-	logf("watchdog exited on its own. Check the output above for details.")
+	// normal operation, since the watchdog is supposed to run indefinitely.
+	// pauseBeforeExit's banner covers explaining this to the player; nothing
+	// more to add here.
 	return 0
 }
 
@@ -154,11 +157,40 @@ func logf(format string, args ...interface{}) {
 }
 
 // pauseBeforeExit keeps the console window open until the user acknowledges
-// it, instead of letting Windows close it the instant the process exits —
-// the actual bug this whole change addresses. Always runs, on every exit
-// path, since a double-click launch has no other way to see what happened.
-func pauseBeforeExit() {
-	fmt.Fprintln(out, "\nPress Enter to close this window...")
+// it, instead of letting Windows close it the instant the process exits.
+//
+// This only ever runs on a VOLUNTARY exit — run() returning on its own,
+// whether from a handled error or from watchdog.js itself exiting. Windows
+// force-kills the process directly on a console-close (X button) before any
+// Go code gets a chance to run at all, so this deliberately does not try to
+// cover that case — a player closing the window on purpose already knows
+// why and shouldn't be asked to confirm it.
+//
+// Every path that reaches here is inherently the ABNORMAL case: watchdog.js
+// is designed to run indefinitely and recovers from ordinary child crashes
+// internally (see the native Node crash CLAUDE.md documents watchdog
+// surviving without ever reaching this code) — reaching this function at
+// all means either a real error occurred, or watchdog itself gave up after
+// repeated restart failures (its own crash-count/backoff limit), which is
+// exactly the kind of thing worth a config fix or a bug report. The banner
+// below says so explicitly and points at launcher.log, rather than a bare
+// "press Enter" that gives no hint whether anything is actually wrong.
+func pauseBeforeExit(exitCode int) {
+	logf("")
+	logf("========================================")
+	if exitCode == 0 {
+		logf("The watchdog exited on its own — this shouldn't normally happen")
+		logf("while the server is meant to be running.")
+	} else {
+		logf("The launcher is exiting because of a problem.")
+	}
+	logf("See the messages above for details.")
+	logf("A copy of this output is also saved in launcher.log, next to this")
+	logf("exe, in case the window closes before you're done reading it.")
+	logf("If this looks like a bug rather than something in config.json,")
+	logf("launcher.log is exactly what's useful to include when reporting it.")
+	logf("========================================")
+	logf("Press Enter to close this window...")
 	bufio.NewReader(os.Stdin).ReadString('\n')
 }
 
@@ -231,15 +263,20 @@ func extractPayload(destRoot string) error {
 // ONLY if config.json doesn't exist yet, or exists but Auth.RegisterClusters
 // is empty/absent. It never regenerates once populated — ClusterId/Secret
 // must stay stable across relaunches (see CLAUDE.md "Config generation"
-// decision: the player pastes these once into GameUserSettings.ini).
+// decision: the player pastes these once into their own
+// GameUserSettings.ini — a single game client here, not a server cluster).
+// The pasteable [CloudStorage] block is printed on EVERY launch, not just
+// generation, since most players will never open config.json themselves —
+// see the reprint branch below for why.
 //
-// Note this is a first-run UX nicety, not a requirement for the app to boot
-// at all — self-registration via POST /auth/register already works against
-// a genuinely empty Auth.RegisterClusters (see CLAUDE.md's 2026-09-05 note
-// under Go-Launcher "Decisions locked in"). If config.json already exists
-// with real (or intentionally empty) values, or is malformed, this function
-// leaves it alone and lets the app's own AppConfigDto validation surface the
-// real error.
+// Note config GENERATION specifically is a first-run UX nicety, not a
+// requirement for the app to boot at all — self-registration via
+// POST /auth/register already works against a genuinely empty
+// Auth.RegisterClusters (see CLAUDE.md's 2026-09-05 note under Go-Launcher
+// "Decisions locked in"). If config.json already exists with real (or
+// intentionally empty) values, or is malformed, this function leaves the
+// file itself alone and lets the app's own AppConfigDto validation surface
+// the real error — it may still print the reminder block, though.
 func ensureConfig(configPath string) error {
 	existing, readErr := os.ReadFile(configPath)
 
@@ -261,37 +298,97 @@ func ensureConfig(configPath string) error {
 		}
 	}
 
-	if !needsGeneration {
+	if needsGeneration {
+		clusterId := randomHex(8)
+		secret := randomHex(24)
+
+		cfg["Auth"] = map[string]interface{}{
+			"RegisterClusters": []map[string]string{
+				{"ClusterId": clusterId, "Secret": secret},
+			},
+		}
+
+		cfgBytes, err := json.MarshalIndent(cfg, "", "  ")
+		if err != nil {
+			return fmt.Errorf("building generated config.json: %w", err)
+		}
+		if err := os.WriteFile(configPath, cfgBytes, 0644); err != nil {
+			return fmt.Errorf("writing config.json: %w", err)
+		}
+
+		logf("")
+		logf("First run: generated cluster credentials.")
+		printCloudStorageBlock(clusterId, secret, resolvePort(cfg))
 		return nil
 	}
 
-	clusterId := randomHex(8)
-	secret := randomHex(24)
-
-	if _, ok := cfg["UseMySQL"]; !ok {
-		cfg["UseMySQL"] = false
+	// Not a fresh generation — config.json already has a real bootstrap
+	// cluster. Most players will never open config.json themselves, so
+	// this reprints the same pasteable block on EVERY launch, not just the
+	// first — otherwise a player who loses their GameUserSettings.ini's
+	// [CloudStorage] section (reinstalling ARK, verifying game files,
+	// moving to a new PC) would have no easy way back to these values
+	// without knowing to go find and read a JSON file they've never seen.
+	// Silently does nothing if config.json's structure doesn't match what
+	// we'd expect (e.g. a hand-edited or unusual entry) — this is a
+	// convenience, not something worth failing boot over.
+	if clusterId, secret, ok := firstBootstrapCluster(cfg); ok {
+		logf("")
+		logf("Your cluster credentials (already in config.json — shown every launch as a reminder):")
+		printCloudStorageBlock(clusterId, secret, resolvePort(cfg))
 	}
-	cfg["Auth"] = map[string]interface{}{
-		"RegisterClusters": []map[string]string{
-			{"ClusterId": clusterId, "Secret": secret},
-		},
-	}
-
-	cfgBytes, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return fmt.Errorf("building generated config.json: %w", err)
-	}
-	if err := os.WriteFile(configPath, cfgBytes, 0644); err != nil {
-		return fmt.Errorf("writing config.json: %w", err)
-	}
-
-	logf("")
-	logf("First run: generated cluster credentials.")
-	logf("  ClusterId: %s", clusterId)
-	logf("  Secret:    (see Auth.RegisterClusters in app/config.json)")
-	logf("Paste both into GameUserSettings.ini on each server in your cluster.")
-	logf("")
 	return nil
+}
+
+// resolvePort reads config.json's Server.Port if present, falling back to
+// AppConfigDto's own documented zero-config default. Given most players
+// never touch config.json at all, this will almost always resolve to the
+// default in practice.
+func resolvePort(cfg map[string]interface{}) int {
+	if server, ok := cfg["Server"].(map[string]interface{}); ok {
+		if p, ok := server["Port"].(float64); ok { // JSON numbers decode as float64
+			return int(p)
+		}
+	}
+	return 3000
+}
+
+// firstBootstrapCluster extracts the ClusterId/Secret of config.json's
+// first Auth.RegisterClusters entry, if present and well-formed.
+func firstBootstrapCluster(cfg map[string]interface{}) (clusterId, secret string, ok bool) {
+	auth, ok := cfg["Auth"].(map[string]interface{})
+	if !ok {
+		return "", "", false
+	}
+	clusters, ok := auth["RegisterClusters"].([]interface{})
+	if !ok || len(clusters) == 0 {
+		return "", "", false
+	}
+	entry, ok := clusters[0].(map[string]interface{})
+	if !ok {
+		return "", "", false
+	}
+	clusterId, idOk := entry["ClusterId"].(string)
+	secret, secretOk := entry["Secret"].(string)
+	if !idOk || !secretOk {
+		return "", "", false
+	}
+	return clusterId, secret, true
+}
+
+// printCloudStorageBlock prints a directly pasteable [CloudStorage] section
+// matching GameUserSettings.ini's real format, so a player never has to
+// reconstruct it by hand from separately labeled values. Safe to include
+// the raw secret here — launcher.log persists this on disk regardless of
+// whether the console window itself stays open.
+func printCloudStorageBlock(clusterId, secret string, port int) {
+	logf("Paste this into your GameUserSettings.ini:")
+	logf("")
+	logf("[CloudStorage]")
+	logf("ID=%s", clusterId)
+	logf("Secret=%s", secret)
+	logf("URL=\"ws://127.0.0.1:%d\"", port)
+	logf("")
 }
 
 func randomHex(n int) string {

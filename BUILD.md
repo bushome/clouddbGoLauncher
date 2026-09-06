@@ -34,12 +34,29 @@ hand. `go:embed` will refuse to build if a `payload\` subfolder is
 completely empty, so don't manually delete a placeholder without something
 already in its place.
 
-### 2a. Portable Node runtime (one-time, manual)
+### 2a. Portable Node runtime (one-time, manual — but read this before picking a version)
 
-Download `node-v24.2.0-win-x64.zip` from nodejs.org, extract it, and copy
-its **contents** into `payload\node\` — `node.exe` should end up directly
-in `payload\node\`, not nested one level deeper. This only needs redoing
-when you deliberately bump the bundled Node version.
+Download `node-vX.Y.Z-win-x64.zip` from nodejs.org, extract it, and copy its
+**contents** into `payload\node\` — `node.exe` should end up directly in
+`payload\node\`, not nested one level deeper. **This step must happen
+before step 2b** — `sync-payload.cmd` now depends on `payload\node\node.exe`
+already existing.
+
+**Whichever version you pick, re-run step 2b (`sync-payload.cmd`) any time
+you change it** — swapping `node.exe` alone is not sufficient. See the
+`CRITICAL` comment in `sync-payload.cmd`'s node_modules section for the full
+story, but in short: `better-sqlite3` uses Node's legacy `node::ObjectWrap`
+C++ pattern, which is not covered by Node's stable-ABI (N-API) guarantee —
+a compiled `better-sqlite3` binary is only reliably compatible with the
+exact Node build it was compiled against, not just "any Node with a
+matching `NODE_MODULE_VERSION`." `sync-payload.cmd` now builds
+`node_modules` using this exact `payload\node\node.exe`, specifically to
+keep the compiled native binary matched to the runtime that will actually
+load it — discovered the hard way after a native crash
+(`RemoveEnvironmentCleanupHook` assertion failure) that persisted
+identically across several different bundled Node versions, because none
+of those earlier tests had actually changed what the native binary was
+built against.
 
 ### 2b. Compiled app + production node_modules (every rebuild)
 
