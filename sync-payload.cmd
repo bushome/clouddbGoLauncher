@@ -15,9 +15,9 @@ REM Edit the two paths below if your trees live somewhere else.
 
 setlocal
 
-set "CLOUDDBGO=C:\Dev\clouddbGo"
-set "DEVTREE=C:\Dev\ark-cloud-storage-no-overflow"
-set "LAUNCHER=C:\Dev\clouddbGoLauncher"
+set "CLOUDDBGO=C:\Dev\ARK CLOUD DEDICATED STORAGE API - No OverFlow\clouddbGO"
+set "DEVTREE=C:\Dev\ARK CLOUD DEDICATED STORAGE API - No OverFlow\ark-cloud-storage-no-overflow"
+set "LAUNCHER=C:\Dev\ARK CLOUD DEDICATED STORAGE API - No OverFlow\clouddbGoLauncher"
 set "PAYLOAD=%LAUNCHER%\payload"
 set "STAGING=%LAUNCHER%\.prod-modules-staging"
 

@@ -3,15 +3,15 @@
 This is the Go source for the solo-player/SQLite portable launcher described
 in CLAUDE.md's "Go-Launcher" sections. Two other trees are prerequisites:
 
-- `C:\Dev\clouddbGo\` — build this first if you haven't already
+- `C:\Dev\ARK CLOUD DEDICATED STORAGE API - No OverFlow\clouddbGo\` — build this first if you haven't already
   (`npm install`, `npm run prisma:generate`, `npm run build`).
-- `C:\Dev\ark-cloud-storage-no-overflow\` — the dev-tree repo, needed only
+- `C:\Dev\ARK CLOUD DEDICATED STORAGE API - No OverFlow\ark-cloud-storage-no-overflow\` — the dev-tree repo, needed only
   for its `watchdog\` folder (see step 2b below — `watchdog\` is never
   symlinked into `clouddbGo`, so `sync-payload.cmd` pulls it from here
   directly).
 
 Suggested location for this Go source: a new sibling folder,
-`C:\Dev\clouddbGoLauncher\`, so it doesn't get tangled in `clouddbGo`'s own
+`C:\Dev\ARK CLOUD DEDICATED STORAGE API - No OverFlow\clouddbGoLauncher\`, so it doesn't get tangled in `clouddbGo`'s own
 `src`/`prisma`/`scripts` symlink set — this tree has no reason to symlink
 anything, since it never touches TypeScript source directly, only
 `clouddbGo`'s **build output**.
@@ -64,13 +64,13 @@ Run `sync-payload.cmd` (in this same folder) after every `npm run build` in
 `clouddbGo`:
 
 ```powershell
-cd C:\Dev\clouddbGoLauncher
+cd "C:\Dev\ARK CLOUD DEDICATED STORAGE API - No OverFlow\clouddbGoLauncher"
 .\sync-payload.cmd
 ```
 
 This copies `dist\` and `generated\sqlite-client\` from `clouddbGo`,
 `watchdog\` from the **dev-tree repo root**
-(`C:\Dev\ark-cloud-storage-no-overflow\watchdog` — not `clouddbGo`, since
+(`C:\Dev\ARK CLOUD DEDICATED STORAGE API - No OverFlow\ark-cloud-storage-no-overflow\watchdog` — not `clouddbGo`, since
 `watchdog\` is never symlinked into any tree and only ever exists at the
 dev-tree repo root or hand-copied into a deployment target, per the same
 convention `clouddb`/`clouddbSEA` already follow), and builds a
@@ -79,7 +79,7 @@ production-only `node_modules` in a **separate scratch staging folder**
 `payload\app\node_modules`.
 
 **Note on how `sync-payload.cmd` handles `node_modules`:** it never runs
-`npm ci --omit=dev` inside `C:\Dev\clouddbGo` itself — only against a copy
+`npm ci --omit=dev` inside `C:\Dev\ARK CLOUD DEDICATED STORAGE API - No OverFlow\clouddbGo` itself — only against a copy
 of `package.json`/`package-lock.json` in its own scratch staging folder.
 Running `--omit=dev` directly in `clouddbGo` would strip devDependencies
 from your actual dev tree in place (`@nestjs/cli` and friends are
@@ -103,7 +103,7 @@ it `config.json.example`, not `config.json`.
 ## 3. Build
 
 ```powershell
-cd C:\Dev\clouddbGoLauncher
+cd "C:\Dev\ARK CLOUD DEDICATED STORAGE API - No OverFlow\clouddbGoLauncher"
 go build -o clouddbgo-launcher.exe .
 ```
 
