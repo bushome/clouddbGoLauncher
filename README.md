@@ -49,7 +49,7 @@ already in its place.
 
 ### 2a. Portable Node runtime (one-time, manual — but read this before picking a version)
 
-Download `node-vX.Y.Z-win-x64.zip` from nodejs.org, extract it, and copy its
+Download `node-vX.Y.Z-win-x64.zip` ( This would be your current node version everything is build off of ) from nodejs.org, extract it, and copy its
 **contents** into `payload\node\` — `node.exe` should end up directly in
 `payload\node\`, not nested one level deeper. **This step must happen
 before step 2b** — `sync-payload.cmd` now depends on `payload\node\node.exe`
