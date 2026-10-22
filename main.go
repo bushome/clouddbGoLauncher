@@ -58,7 +58,7 @@ var payloadFS embed.FS
 // embeddedVersion must be bumped any time payload/ contents change, so that
 // existing installs re-extract instead of running stale files forever.
 // sync-payload.cmd bumps this automatically — see BUILD.md.
-const embeddedVersion = "0.1.0"
+const embeddedVersion = "20261022-041020"
 
 const versionMarkerFilename = ".payload-version"
 const logFilename = "launcher.log"

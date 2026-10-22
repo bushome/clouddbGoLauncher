@@ -111,15 +111,10 @@ if %ERRORLEVEL% GEQ 8 goto :robocopy_failed
 echo.
 echo === Bumping embeddedVersion in main.go ===
 
-powershell -NoProfile -Command ^
-    "$ts = Get-Date -Format 'yyyyMMdd-HHmmss'; " ^
-    "$path = Join-Path '%LAUNCHER%' 'main.go'; " ^
-    "if (-not (Test-Path $path)) { Write-Error \"main.go not found at $path\"; exit 1 }; " ^
-    "$content = Get-Content $path -Raw; " ^
-    "if ($content -notmatch 'const embeddedVersion = \"[^\"]*\"') { Write-Error 'embeddedVersion const not found in main.go'; exit 1 }; " ^
-    "$content = $content -replace 'const embeddedVersion = \"[^\"]*\"', ('const embeddedVersion = \"' + $ts + '\"'); " ^
-    "Set-Content -Path $path -Value $content -NoNewline; " ^
-    "Write-Host ('  embeddedVersion set to ' + $ts)"
+REM The bump lives in bump-version.ps1 rather than inline here: cmd mangles
+REM the quotes and ^ in an inline -Command regex, which silently broke this
+REM step and left embeddedVersion at "0.1.0" in every release before 2026-10-22.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%LAUNCHER%\bump-version.ps1" -MainGo "%LAUNCHER%\main.go"
 
 if errorlevel 1 (
     echo ERROR: version bump step failed. Check main.go's embeddedVersion line by hand.
