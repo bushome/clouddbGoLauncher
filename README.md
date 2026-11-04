@@ -182,3 +182,8 @@ them so they don't get mistaken for oversights when you review the code:
 - **SQLite Resilience (WAL mode, `PRAGMA quick_check`, backup/restore) lives
   in the NestJS app itself** ("keeps the stub's job
   narrow"), not in this Go code — nothing to add here for that.
+
+  ## Development
+
+Developed with AI assistance (Claude). Every change was reviewed and tested on a dedicated test server
+before going live.
